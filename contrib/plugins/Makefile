@@ -16,6 +16,7 @@ NAMES :=
 NAMES += bbv
 NAMES += execlog
 NAMES += hotblocks
+NAMES += hotseq
 NAMES += hotpages
 NAMES += howvec
 
