@@ -38,19 +38,20 @@ typedef struct {
     uint32_t  *instructions;
 } InstructionBlock;
 
+#ifdef LOG_IB
 static void log_instruction_block(InstructionBlock* ib)
 {
     uint64_t exe_count = qemu_plugin_u64_sum(qemu_plugin_scoreboard_u64(ib->sb_count));
     g_autoptr(GString) ib_str = g_string_new("-------------- IB --------------\n");
     g_string_append_printf(ib_str, "Execution count  :%lu\n", exe_count);
-    g_string_append_printf(ib_str, "Address          :%lX\n", ib->start_addr);
+    g_string_append_printf(ib_str, "Address          :0x%lx\n", ib->start_addr);
     g_string_append_printf(ib_str, "Instruction count:%zu\n", ib->num_ins);
     g_string_append_printf(ib_str, "Translation count:%zu\n", ib->tb_count);
     g_string_append_printf(ib_str, "Opcodes: {");
     for (size_t i = 0; i < ib->num_ins; i++) {
       g_string_append_printf(ib_str, "0x%x, ", ib->instructions[i]);
     }
-    g_string_append_printf(ib_str, "0x0\n");
+    g_string_append_printf(ib_str, "0x0 }\n");
     qemu_plugin_outs(ib_str->str);
 }
 
@@ -63,6 +64,7 @@ static void log_ib_table() {
         }
     }
 }
+#endif
 
 struct tree_node {
   uint32_t opcode;
@@ -188,9 +190,35 @@ static uint64_t hot_seq_low()
     return ret;
 }
 
+static void find_matching_ibs(uint32_t opcodes[]) {
+    GList * block_it = g_hash_table_get_values(instructionblock_table);
+    g_autoptr(GString) str = g_string_new("At:");
+    if (block_it != 0) {
+        for (; block_it->next != 0; block_it = block_it->next) {
+            InstructionBlock *ib = (InstructionBlock *) block_it->data;
+            int match = 1;
+            for (int i = 0; i < ib->num_ins && i < SEQ_MAX; i++) {
+                if (opcodes[i] == 0) {
+                    break;
+                }
+                if (ib->instructions[i] != opcodes[i]) {
+                    match = 0;
+                    break;
+                }
+            }
+            if (match == 1) {
+                g_string_append_printf(str, " 0x%lx ", ib->start_addr);
+            }
+        }
+    }
+    g_string_append_printf(str, "\n");
+    qemu_plugin_outs(str->str);
+}
+
 static void log_hot_seq()
 {
     for (int i = 0; i < HOT_SEQS; i++) {
+        uint32_t opcodes[SEQ_MAX] = {0};
         struct tree_node *curser = &root;
         if (hot_seqs[i].count == 0) {
               continue;
@@ -206,14 +234,16 @@ static void log_hot_seq()
             }
             curser = curser->next[pos];
             g_string_append_printf(hs_str, "0x%x, ", curser->opcode);
+            opcodes[k] = curser->opcode;
             last_count = curser->count;
             instruction_count++;
         }
         uint64_t nins =  last_count * instruction_count;
         double   perc = (nins*1.0) / total_executed;
-        g_string_append_printf(hs_str, "} Executed: %lu, %lu of %lu == %g \n",
+        g_string_append_printf(hs_str, "} Executed: %lu, %lu of %lu == %g, ",
                                last_count, nins, total_executed, perc);
         qemu_plugin_outs(hs_str->str);
+        find_matching_ibs(opcodes);
     }
 }
 
@@ -276,7 +306,9 @@ static void plugin_init(void)
 
 static void plugin_exit(qemu_plugin_id_t id, void *p)
 {
+#ifdef LOG_IB
     log_ib_table();
+#endif
     build_tree();
     process_tree();
     sort_hot_seq();
