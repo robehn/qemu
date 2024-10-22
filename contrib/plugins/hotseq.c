@@ -38,6 +38,8 @@ typedef struct {
     uint32_t  *instructions;
 } InstructionBlock;
 
+#define LOG_IB 1
+
 #ifdef LOG_IB
 static void log_instruction_block(InstructionBlock* ib)
 {
@@ -196,17 +198,13 @@ static void find_matching_ibs(uint32_t opcodes[]) {
     if (block_it != 0) {
         for (; block_it->next != 0; block_it = block_it->next) {
             InstructionBlock *ib = (InstructionBlock *) block_it->data;
-            int match = 1;
-            for (int i = 0; i < ib->num_ins && i < SEQ_MAX; i++) {
-                if (opcodes[i] == 0) {
-                    break;
-                }
+            int i = 0;
+            for ( ; i < ib->num_ins && opcodes[i] == 0; i++) {
                 if (ib->instructions[i] != opcodes[i]) {
-                    match = 0;
                     break;
                 }
             }
-            if (match == 1) {
+            if (opcodes[i] == 0) {
                 g_string_append_printf(str, " 0x%lx ", ib->start_addr);
             }
         }
