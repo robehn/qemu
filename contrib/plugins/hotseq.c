@@ -198,13 +198,18 @@ static void find_matching_ibs(uint32_t opcodes[]) {
     if (block_it != 0) {
         for (; block_it->next != 0; block_it = block_it->next) {
             InstructionBlock *ib = (InstructionBlock *) block_it->data;
-            int i = 0;
-            for ( ; i < ib->num_ins && opcodes[i] == 0; i++) {
+            int match = 1;
+            for (int i = 0; i < SEQ_MAX && opcodes[i] != 0; i++) {
+                if (i >= ib->num_ins) {
+                  match = 0;
+                  break;
+                }
                 if (ib->instructions[i] != opcodes[i]) {
-                    break;
+                  match = 0;
+                  break;
                 }
             }
-            if (opcodes[i] == 0) {
+            if (match == 1) {
                 g_string_append_printf(str, " 0x%lx ", ib->start_addr);
             }
         }
